@@ -4008,6 +4008,8 @@ pt_show_function (FUNC_TYPE c)
       return "insert";
     case F_ELT:
       return "elt";
+    case F_COMBINE:
+      return "combine";
     default:
       return "unknown function";
     }

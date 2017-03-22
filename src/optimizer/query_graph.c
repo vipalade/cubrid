@@ -3254,6 +3254,7 @@ get_expr_fcode_rank (FUNC_TYPE fcode)
   switch (fcode)
     {
     case F_ELT:
+    case F_COMBINE:
       return RANK_EXPR_LIGHT;
     case F_INSERT_SUBSTRING:
       return RANK_EXPR_MEDIUM;

@@ -286,6 +286,11 @@ int yybuffer_pos;
 [eE][lL][tT]								{ begin_token(yytext);
 										csql_yylval.cptr = pt_makename(yytext); 
 										return ELT; }
+
+[cC][oO][mM][bB][iI][nN][eE]						{ begin_token(yytext);
+										csql_yylval.cptr = pt_makename(yytext); 
+										return COMBINE; }
+
 [eE][nN][dD]								{ begin_token(yytext);   return END; }
 [eE][nN][uU][mM]							{ begin_token(yytext);	 return ENUM; }
 [eE][qQ][uU][aA][lL][sS]						{ begin_token(yytext);   return EQUALS; }

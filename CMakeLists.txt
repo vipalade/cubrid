@@ -30,6 +30,7 @@ project(CUBRID)
 if(UNIX)
   set(USE_BISON_FLEX_DEFAULT ON)
   set(ENABLE_SYSTEMTAP_DEFAULT ON)
+  SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 else(UNIX)
   set(USE_BISON_FLEX_DEFAULT OFF)
   set(ENABLE_SYSTEMTAP_DEFAULT OFF)
@@ -205,13 +206,19 @@ if(USE_BISON_FLEX)
   find_package(FLEX)
 
   if(USE_BISON_NEWDIRECTIVE)
-    file(READ ${CSQL_GRAMMAR_INPUT} yy )
-    string(REPLACE "%{/*%CODE_REQUIRES_START%*/" "%code requires{" mod_yy "${yy}" )
-    string(REPLACE "%{/*%CODE_PROVIDES_START%*/" "%code provides{" mod_yy "${mod_yy}" )
-    string(REPLACE "/*%CODE_END%*/%}" "}" mod_yy "${mod_yy}" )
-    set(CSQL_GRAMMAR_INPUT ${CMAKE_BINARY_DIR}/csql_grammar.yy)
-    file(WRITE ${CSQL_GRAMMAR_INPUT} "${mod_yy}")
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/csql_grammar.yy
+      COMMAND ${CMAKE_COMMAND} -DGRAMMAR_INPUT_FILE=${CMAKE_SOURCE_DIR}/src/parser/csql_grammar.y -DGRAMMAR_OUTPUT_FILE=${CMAKE_CURRENT_BINARY_DIR}/csql_grammar.yy -P ${CMAKE_SOURCE_DIR}/cmake/upgrade_bison_grammar.cmake
+      MAIN_DEPENDENCY ${CMAKE_SOURCE_DIR}/src/parser/csql_grammar.y
+    )
+  else()
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/csql_grammar.yy
+      COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/src/parser/csql_grammar.y ${CMAKE_CURRENT_BINARY_DIR}/csql_grammar.yy
+      MAIN_DEPENDENCY ${CMAKE_SOURCE_DIR}/src/parser/csql_grammar.y
+    )
   endif(USE_BISON_NEWDIRECTIVE)
+  
+  set(CSQL_GRAMMAR_INPUT ${CMAKE_CURRENT_BINARY_DIR}/csql_grammar.yy)
+  
   bison_target(csql_grammar ${CSQL_GRAMMAR_INPUT} ${CSQL_GRAMMAR_OUTPUT}
     COMPILE_FLAGS "--no-lines --name-prefix=csql_yy -d -r all")
   flex_target(csql_lexer ${CSQL_LEXER_INPUT} ${CSQL_LEXER_OUTPUT}
@@ -229,13 +236,19 @@ if(USE_BISON_FLEX)
   add_custom_target(gen_loader_lexer DEPENDS ${FLEX_loader_lexer_OUTPUTS})
 
   if(USE_BISON_NEWDIRECTIVE)
-    file(READ ${ESQL_GRAMMAR_INPUT} yy )
-    string(REPLACE "%{/*%CODE_REQUIRES_START%*/" "%code requires{" mod_yy "${yy}" )
-    string(REPLACE "%{/*%CODE_PROVIDES_START%*/" "%code provides{" mod_yy "${mod_yy}" )
-    string(REPLACE "/*%CODE_END%*/%}" "}" mod_yy "${mod_yy}" )
-    set(ESQL_GRAMMAR_INPUT ${CMAKE_BINARY_DIR}/esql_grammar.yy)
-    file(WRITE ${ESQL_GRAMMAR_INPUT} "${mod_yy}")
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/esql_grammar.yy
+      COMMAND ${CMAKE_COMMAND} -DGRAMMAR_INPUT_FILE=${CMAKE_SOURCE_DIR}/src/executables/esql_grammar.y -DGRAMMAR_OUTPUT_FILE=${CMAKE_CURRENT_BINARY_DIR}/esql_grammar.yy -P ${CMAKE_SOURCE_DIR}/cmake/upgrade_bison_grammar.cmake
+      MAIN_DEPENDENCY ${CMAKE_SOURCE_DIR}/src/executables/esql_grammar.y
+    )
+  else()
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/esql_grammar.yy
+      COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/src/executables/esql_grammar.y ${CMAKE_CURRENT_BINARY_DIR}/esql_grammar.yy
+      MAIN_DEPENDENCY ${CMAKE_SOURCE_DIR}/src/parser/esql_grammar.y
+    )
   endif(USE_BISON_NEWDIRECTIVE)
+  
+  set(ESQL_GRAMMAR_INPUT ${CMAKE_CURRENT_BINARY_DIR}/esql_grammar.yy)
+  
   bison_target(esql_grammar ${ESQL_GRAMMAR_INPUT} ${ESQL_GRAMMAR_OUTPUT}
     COMPILE_FLAGS "--no-lines --name-prefix=esql_yy -d -r all")
   flex_target(esql_lexer ${ESQL_LEXER_INPUT} ${ESQL_LEXER_OUTPUT}
@@ -773,7 +786,7 @@ if(WITH_LIBLZO STREQUAL "BUNDLED")
   if(UNIX)
     set(LIBLZO_TARGET liblzo)
     externalproject_add(${LIBLZO_TARGET}
-      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/lzo-2.03
+      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/lzo-2.10
       CONFIGURE_COMMAND ${DEFAULT_CONFIGURE_OPTS}
       BUILD_COMMAND make all AUTOCONF=: AUTOHEADER=: AUTOMAKE=: ACLOCAL=:
       INSTALL_COMMAND make install AUTOCONF=: AUTOHEADER=: AUTOMAKE=: ACLOCAL=:

@@ -4069,7 +4069,7 @@ fetch_peek_dbval (THREAD_ENTRY * thread_p, REGU_VARIABLE * regu_var, VAL_DESCR *
 	      break;
 
 	    case F_ELT:
-	      /* should sync with qdata_elt () */
+              /* should sync with qdata_elt () */
 	      {
 		REGU_VARIABLE_LIST operand;
 		DB_VALUE *index = NULL;
@@ -4160,7 +4160,98 @@ fetch_peek_dbval (THREAD_ENTRY * thread_p, REGU_VARIABLE * regu_var, VAL_DESCR *
 #endif
 	      }
 	      break;
+            case F_COMBINE:
+	      /* should sync with qdata_combine () */
+	      {
+		REGU_VARIABLE_LIST operand;
+		DB_VALUE *index = NULL;
+		DB_TYPE index_type;
+		DB_BIGINT idx = 0;
+		bool is_null_elt = false;
 
+		assert (funcp->operand != NULL);
+		if (!REGU_VARIABLE_IS_FLAGED (&funcp->operand->value, REGU_VARIABLE_FETCH_ALL_CONST))
+		  {
+		    not_const++;
+		  }
+		else
+		  {
+		    error = fetch_peek_dbval (thread_p, &funcp->operand->value, vd, NULL, obj_oid, tpl, &index);
+		    if (error != NO_ERROR)
+		      {
+			goto exit_on_error;
+		      }
+
+		    index_type = DB_VALUE_DOMAIN_TYPE (index);
+
+		    switch (index_type)
+		      {
+		      case DB_TYPE_SMALLINT:
+			idx = DB_GET_SMALLINT (index);
+			break;
+		      case DB_TYPE_INTEGER:
+			idx = DB_GET_INTEGER (index);
+			break;
+		      case DB_TYPE_BIGINT:
+			idx = DB_GET_BIGINT (index);
+			break;
+		      case DB_TYPE_NULL:
+			is_null_elt = true;
+			break;
+		      default:
+			assert (false);	/* is impossible */
+			error = ER_QPROC_INVALID_DATATYPE;
+			er_set (ER_ERROR_SEVERITY, ARG_FILE_LINE, error, 0);
+			if (index != NULL && index->need_clear == true)
+			  {
+			    pr_clear_value (index);
+			  }
+			goto exit_on_error;
+		      }
+
+		    if (!is_null_elt)
+		      {
+			if (idx <= 0)
+			  {
+			    /* index is 0 or is negative */
+			    is_null_elt = true;
+			  }
+			else
+			  {
+			    idx--;
+			    operand = funcp->operand->next;
+
+			    while (idx > 0 && operand != NULL)
+			      {
+				operand = operand->next;
+				idx--;
+			      }
+
+			    if (operand == NULL)
+			      {
+				/* index greater than number of arguments */
+				is_null_elt = true;
+			      }
+			    else
+			      {
+				assert (operand != NULL);
+				if (!REGU_VARIABLE_IS_FLAGED (&(operand->value), REGU_VARIABLE_FETCH_ALL_CONST))
+				  {
+				    not_const++;
+				  }
+			      }	/* operand != NULL */
+			  }
+		      }		/* if (!is_null_elt) */
+		  }		/* else */
+
+#if !defined(NDEBUG)
+		if (is_null_elt)
+		  {
+		    assert (not_const == 0);
+		  }
+#endif
+	      }
+	      break;
 	    default:
 	      not_const++;	/* is not constant */
 	      break;
@@ -4197,6 +4288,7 @@ fetch_peek_dbval (THREAD_ENTRY * thread_p, REGU_VARIABLE * regu_var, VAL_DESCR *
 
 	case F_INSERT_SUBSTRING:
 	case F_ELT:
+        case F_COMBINE:
 	  break;
 
 	default:

@@ -3035,6 +3035,57 @@ db_string_elt (DB_VALUE * result, DB_VALUE * arg[], int const num_args)
   return NO_ERROR;
 }
 
+/*
+    COMBINE(arg0, arg1, arg2, arg3, ...)
+
+    Combine the parameters as follows: arg1 + arg0 + arg2 + arg0 + arg3 + arg0 + ...
+
+    Returns: NO_ERROR or an error code
+*/
+int
+db_string_combine (DB_VALUE * result, DB_VALUE * arg[], int const num_args)
+{
+  
+  if (num_args <= 1)
+    {
+      DB_MAKE_NULL (result);
+      return NO_ERROR;
+    }
+  
+  if (num_args == 2)
+    {
+      pr_clone_value (arg[1], result);
+      return NO_ERROR;
+    }
+  
+  DB_VALUE        tmp_val;
+  DB_DATA_STATUS  truncation;
+  
+  pr_clone_value (arg[1], &tmp_val);
+  
+  int             err = NO_ERROR;
+  
+  for(int i = 2; i < num_args; ++i){
+    err = db_string_concatenate(&tmp_val, arg[0], &tmp_val, &truncation);
+    if(err || truncation != DATA_STATUS_OK)
+      {
+        DB_MAKE_NULL (result);
+        return err;
+      }
+    err = db_string_concatenate(&tmp_val, arg[i], &tmp_val, &truncation);
+    if(err || truncation != DATA_STATUS_OK)
+      {
+        DB_MAKE_NULL (result);
+        return err;
+      }
+  }
+  
+  pr_clone_value (&tmp_val, result);
+  
+  return NO_ERROR;
+}
+
+
 #if defined (ENABLE_UNUSED_FUNCTION)
 /*
  * db_string_byte_length

@@ -1454,6 +1454,7 @@ int g_original_buffer_len;
 %token COMP_LE
 %token PARAM_HEADER
 
+
 %token <cptr> ACCESS
 %token <cptr> ACTIVE
 %token <cptr> ADDDATE
@@ -1481,6 +1482,7 @@ int g_original_buffer_len;
 %token <cptr> DECREMENT
 %token <cptr> DENSE_RANK
 %token <cptr> ELT
+%token <cptr> COMBINE
 %token <cptr> EXPLAIN
 %token <cptr> FIRST_VALUE
 %token <cptr> FULLSCAN
@@ -15004,6 +15006,23 @@ reserved_func
 				    MSGCAT_SET_PARSER_SEMANTIC,
 				    MSGCAT_SEMANTIC_INVALID_INTERNAL_FUNCTION,
 				    "elt");
+		    }
+
+		    $$ = node;
+		    PARSER_SAVE_ERR_CONTEXT ($$, @$.buffer_pos)
+		DBG_PRINT}}
+        | COMBINE '(' opt_expression_list ')'
+		{{
+		    PT_NODE *args_list = $3;
+		    PT_NODE *node = NULL;
+
+		    node = parser_make_expr_with_func (this_parser, F_COMBINE, args_list);
+		    if (parser_count_list(args_list) < 1)
+		    {
+			PT_ERRORmf (this_parser, args_list,
+				    MSGCAT_SET_PARSER_SEMANTIC,
+				    MSGCAT_SEMANTIC_INVALID_INTERNAL_FUNCTION,
+				    "combine");
 		    }
 
 		    $$ = node;

@@ -90,7 +90,7 @@ typedef enum
 
 /* "normal" functions, arguments are values */
   F_SET, F_MULTISET, F_SEQUENCE, F_VID, F_GENERIC, F_CLASS_OF,
-  F_INSERT_SUBSTRING, F_ELT,
+  F_INSERT_SUBSTRING, F_ELT, F_COMBINE,
 
 /* only for FIRST_VALUE. LAST_VALUE, NTH_VALUE analytic functions */
   PT_FIRST_VALUE, PT_LAST_VALUE, PT_NTH_VALUE,

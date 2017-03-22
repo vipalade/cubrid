@@ -710,7 +710,7 @@ pt_is_expr_wrapped_function (PARSER_CONTEXT * parser, const PT_NODE * node)
   if (node->node_type == PT_FUNCTION)
     {
       function_type = node->info.function.function_type;
-      if (function_type == F_INSERT_SUBSTRING || function_type == F_ELT)
+      if (function_type == F_INSERT_SUBSTRING || function_type == F_ELT || function_type == F_COMBINE)
 	{
 	  return true;
 	}
