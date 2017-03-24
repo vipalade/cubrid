@@ -221,7 +221,7 @@ static int qdata_insert_substring_function (THREAD_ENTRY * thread_p, FUNCTION_TY
 
 static int qdata_elt (THREAD_ENTRY * thread_p, FUNCTION_TYPE * function_p, VAL_DESCR * val_desc_p, OID * obj_oid_p,
 		      QFILE_TUPLE tuple);
-static int qdata_combine (THREAD_ENTRY * thread_p, FUNCTION_TYPE * function_p, VAL_DESCR * val_desc_p, OID * obj_oid_p,
+static int qdata_combine (THREAD_ENTRY * thread_p, FUNCTION_TYPE * function_p, REGU_VARIABLE * regu_var, VAL_DESCR * val_desc_p, OID * obj_oid_p,
 		      QFILE_TUPLE tuple);
 
 static int (*generic_func_ptrs[]) (THREAD_ENTRY * thread_p, DB_VALUE *, int, DB_VALUE **) =
@@ -8832,7 +8832,7 @@ qdata_evaluate_function (THREAD_ENTRY * thread_p, REGU_VARIABLE * function_p, VA
     case F_ELT:
       return qdata_elt (thread_p, funcp, val_desc_p, obj_oid_p, tuple);
     case F_COMBINE:
-      return qdata_combine(thread_p, funcp, val_desc_p, obj_oid_p, tuple);
+      return qdata_combine(thread_p, funcp, function_p, val_desc_p, obj_oid_p, tuple);
 
     default:
       er_set (ER_ERROR_SEVERITY, ARG_FILE_LINE, ER_QPROC_INVALID_XASLNODE, 0);
@@ -10462,22 +10462,17 @@ error_exit:
 }
 
 /*
- * qdata_combine() - returns the argument with the index in the parameter list
- *		equal to the value passed in the first argument. Returns
- *		NULL if the first arguments is NULL, is 0, is negative or is
- *		greater than the number of the other arguments.
+ * qdata_combine() - returns a string as concat_ws
  */
 static int
-qdata_combine (THREAD_ENTRY * thread_p, FUNCTION_TYPE * function_p, VAL_DESCR * val_desc_p, OID * obj_oid_p,
+qdata_combine (THREAD_ENTRY * thread_p, FUNCTION_TYPE * function_p, REGU_VARIABLE * regu_var, VAL_DESCR * val_desc_p, OID * obj_oid_p,
 	   QFILE_TUPLE tuple)
 {
-  //VAPA: TODO:
-  DB_VALUE *index = NULL;
-  REGU_VARIABLE_LIST operand;
-  int error_status = NO_ERROR;
-  DB_TYPE index_type;
-  DB_BIGINT idx = 0;
-  DB_VALUE *operand_value = NULL;
+  DB_VALUE            *separator = NULL;
+  REGU_VARIABLE_LIST  operand;
+  int                 error_status = NO_ERROR;
+  DB_VALUE            *operand_value = NULL;
+  DB_DATA_STATUS      status;
 
   /* should sync with fetch_peek_dbval () */
 
@@ -10485,69 +10480,80 @@ qdata_combine (THREAD_ENTRY * thread_p, FUNCTION_TYPE * function_p, VAL_DESCR * 
   assert (function_p->value);
   assert (function_p->operand);
 
-  error_status = fetch_peek_dbval (thread_p, &function_p->operand->value, val_desc_p, NULL, obj_oid_p, tuple, &index);
+  error_status = fetch_peek_dbval (thread_p, &function_p->operand->value, val_desc_p, NULL, obj_oid_p, tuple, &separator);
   if (error_status != NO_ERROR)
     {
       goto error_exit;
     }
-
-  index_type = DB_VALUE_DOMAIN_TYPE (index);
-
-  switch (index_type)
-    {
-    case DB_TYPE_SMALLINT:
-      idx = DB_GET_SMALLINT (index);
-      break;
-    case DB_TYPE_INTEGER:
-      idx = DB_GET_INTEGER (index);
-      break;
-    case DB_TYPE_BIGINT:
-      idx = DB_GET_BIGINT (index);
-      break;
-    case DB_TYPE_NULL:
-      DB_MAKE_NULL (function_p->value);
-      goto fast_exit;
-    default:
-      er_set (ER_ERROR_SEVERITY, ARG_FILE_LINE, ER_QPROC_INVALID_DATATYPE, 0);
-      error_status = ER_QPROC_INVALID_DATATYPE;
-      goto error_exit;
-    }
-
-  if (idx <= 0)
-    {
-      /* index is 0 or is negative */
-      DB_MAKE_NULL (function_p->value);
-      goto fast_exit;
-    }
-
-  idx--;
+  
   operand = function_p->operand->next;
-
-  while (idx > 0 && operand != NULL)
+  
+  DB_MAKE_STRING(function_p->value, "");
+  
+  if(operand != NULL)
     {
+      
+      error_status = fetch_peek_dbval (thread_p, &operand->value, val_desc_p, NULL, obj_oid_p, tuple, &operand_value);
+      if (error_status != NO_ERROR)
+        {
+          goto error_exit;
+        } 
+      
+      error_status = db_string_concatenate(function_p->value, operand_value, function_p->value, &status);
+          
+      if(error_status)
+        {
+          goto error_exit;
+        }
+      if(status != DATA_STATUS_OK)
+        {
+          error_status = ER_EV_TRUNC;
+          goto error_exit;
+        }
       operand = operand->next;
-      idx--;
+      while (operand != NULL)
+        {
+          error_status = db_string_concatenate(function_p->value, separator, function_p->value, &status);
+          if(error_status)
+            {
+              goto error_exit;
+            }
+          if(status != DATA_STATUS_OK)
+            {
+              error_status = ER_EV_TRUNC;
+              goto error_exit;
+            }
+            
+          error_status = fetch_peek_dbval (thread_p, &operand->value, val_desc_p, NULL, obj_oid_p, tuple, &operand_value);
+          
+          if (error_status != NO_ERROR)
+            {
+              goto error_exit;
+            } 
+          
+          error_status = db_string_concatenate(function_p->value, operand_value, function_p->value, &status);
+          
+          if(error_status)
+            {
+              goto error_exit;
+            }
+          if(status != DATA_STATUS_OK)
+            {
+              error_status = ER_EV_TRUNC;
+              goto error_exit;
+            }
+          operand = operand->next;
+        }
     }
-
-  if (operand == NULL)
+  else
     {
-      /* index greater than number of arguments */
-      DB_MAKE_NULL (function_p->value);
       goto fast_exit;
-    }
-
-  error_status = fetch_peek_dbval (thread_p, &operand->value, val_desc_p, NULL, obj_oid_p, tuple, &operand_value);
-  if (error_status != NO_ERROR)
-    {
-      goto error_exit;
     }
 
   /* 
    * operand should already be cast to the right type (CHAR
    * or NCHAR VARYING)
    */
-  error_status = pr_clone_value (operand_value, function_p->value);
-
 fast_exit:
   return error_status;
 
