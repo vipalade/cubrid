@@ -56,6 +56,7 @@ set(WITH_LIBEDIT      "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with editlin
 set(WITH_LIBLZO       "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with lzo library (default: BUNDLED)")
 set(WITH_LIBGPGERROR  "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with gpg-error library (default: BUNDLED)")
 set(WITH_LIBGCRYPT    "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with gcrypt library (default: BUNDLED)")
+set(WITH_BOOST        "http://netcologne.dl.sourceforge.net/project/boost/boost/1.63.0/boost_1_63_0.tar.gz" CACHE STRING "Build with boost framework")
 
 # Version info
 # TODO: remove BUILD_NUMBER file and replace with VERSION file
@@ -364,6 +365,7 @@ set(WIN_TOOLS_DIR            ${CMAKE_SOURCE_DIR}/src/win_tools)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(
+  libs
   include
   src/api
   src/base
@@ -713,6 +715,9 @@ endif(USE_CUBRID_ENV)
 
 # For external library options
 include(ExternalProject)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set_property(DIRECTORY PROPERTY EP_BASE "${CMAKE_BINARY_DIR}/external")
 set(DEFAULT_CONFIGURE_OPTS <SOURCE_DIR>/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/external --enable-static --disable-shared --with-pic CFLAGS=${CMAKE_C_FLAGS} CXXFLAGS=${CMAKE_CXX_FLAGS})
 
@@ -934,6 +939,7 @@ endif(WITH_LIBGCRYPT STREQUAL "BUNDLED")
 list(APPEND EP_INCLUDES ${LIBGCRYPT_INCLUDES})
 list(APPEND EP_LIBS ${LIBGCRYPT_LIBS})
 
+include(cmake/FindBoost.cmake)
 
 # For JVM libraries
 if(WIN32)
@@ -962,6 +968,7 @@ add_subdirectory(contrib)
 add_subdirectory(tools)
 add_subdirectory(locales)
 add_subdirectory(timezones)
+add_subdirectory(libs)
 
 if(WITH_JDBC)
   find_program(ANT ant PATHS $ENV{ANT_HOME} ENV PATH)
