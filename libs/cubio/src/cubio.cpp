@@ -3,6 +3,7 @@
 #include "boost/asio/io_service.hpp"
 #include "boost/asio/ip/tcp.hpp"
 #include "cubio/cubio.h"
+#include <chrono>
 #include <thread>
 #include <vector>
 #include <memory>
@@ -56,6 +57,10 @@ void cubio_free_user_data_clean(void*_pv){
   }
 }
 
+inline cubio_error_code cubio_error_make(const boost::system::error_code &_rerr){
+  return cubio_error_make(_rerr.value(), &_rerr.category());
+}
+
 //-----------------------------------------------------------------------------
 
 void cubio_service_destroy(cubio_service_t* _psvc){
@@ -72,15 +77,17 @@ void cubio_service_destroy(cubio_service_t* _psvc){
 //-----------------------------------------------------------------------------
 
 struct cubio_connection: std::enable_shared_from_this<cubio_connection>{
-  asio::ip::tcp::socket   socket_;
+  asio::ip::tcp::socket       socket_;
+  asio::io_service::strand    strand_;
+  asio::deadline_timer        timer_;
   
-  void*                   user_data_;
-  cubio_free_user_data_t  free_user_data_fnc_;
+  void*                       user_data_;
+  cubio_free_user_data_t      free_user_data_fnc_;
   
   
   cubio_connection(
     asio::io_service &_rio_service
-  ):socket_(_rio_service), user_data_(nullptr), free_user_data_fnc_(nullptr){}
+  ):socket_(_rio_service), strand_(_rio_service), timer_(_rio_service), user_data_(nullptr), free_user_data_fnc_(nullptr){}
   
   ~cubio_connection(){
     setUserData(nullptr, nullptr);
@@ -146,7 +153,7 @@ void cubio_listener_start(
   
   auto l = [lisptr, _listen_queue_size, _pf, _pd](const system::error_code& error, asio::ip::tcp::resolver::iterator iterator){
     if(error){
-      (*_pf)(nullptr, _pd, cubio_error_make(error.value(), &error.category()));
+      (*_pf)(nullptr, _pd, cubio_error_make(error));
       //let lisptr delete listener
     }else{
       boost::system::error_code err;
@@ -155,7 +162,7 @@ void cubio_listener_start(
       lisptr->acceptor_.open(endpoint.protocol(), err);
       
       if(err){
-        (*_pf)(nullptr, _pd, cubio_error_make(err.value(), &err.category()));
+        (*_pf)(nullptr, _pd, cubio_error_make(err));
         return;
       }
       
@@ -164,20 +171,20 @@ void cubio_listener_start(
       lisptr->acceptor_.set_option(option, err);
       
       if(err){
-        (*_pf)(nullptr, _pd, cubio_error_make(err.value(), &err.category()));
+        (*_pf)(nullptr, _pd, cubio_error_make(err));
         return;
       }
       
       lisptr->acceptor_.bind(endpoint, err);
       if(err){
-        (*_pf)(nullptr, _pd, cubio_error_make(err.value(), &err.category()));
+        (*_pf)(nullptr, _pd, cubio_error_make(err));
         return;
       }
       
       lisptr->acceptor_.listen(_listen_queue_size, err);
       
       if(err){
-        (*_pf)(nullptr, _pd, cubio_error_make(err.value(), &err.category()));
+        (*_pf)(nullptr, _pd, cubio_error_make(err));
         return;
       }
       
@@ -216,10 +223,11 @@ void cubio_listener_async_accept(
   
   auto l = [lisptr, _pf, _pd](const system::error_code& error){
     if(error){
-      (*_pf)(lisptr.get(), nullptr, _pd, cubio_error_make(error.value(), &error.category()));
+      (*_pf)(lisptr.get(), nullptr, _pd, cubio_error_make(error));
     }else{
       connection_ptr_t conptr{std::move(lisptr->connection_ptr_)};
-      (*_pf)(lisptr.get(), conptr.get(), _pd, cubio_error_make(error.value(), &error.category()));
+     
+      (*_pf)(lisptr.get(), conptr.get(), _pd, cubio_error_make(error));
     }
   };
   
@@ -276,6 +284,17 @@ void cubio_connection_set_user_data(cubio_connection_t *_pcon, void *_pd, cubio_
 
 //-----------------------------------------------------------------------------
 
+cubio_error_code cubio_connection_set_no_delay(cubio_connection_t *_pcon, const bool _option){
+  boost::asio::ip::tcp::no_delay  option(_option);
+  system::error_code              error;
+  _pcon->socket_.set_option(option, error);
+  return cubio_error_make(error);
+}
+
+//-----------------------------------------------------------------------------
+
+cubio_error_code cubio_connection_set_no_delay(bool _how);
+
 void cubio_connection_async_connect(
   cubio_connection_t *_pcon,
   const char *_host, const char *_service,
@@ -285,11 +304,11 @@ void cubio_connection_async_connect(
   
   auto l = [conptr, _pf, _pd](const system::error_code& error, asio::ip::tcp::resolver::iterator iterator){
     if(error){
-      (*_pf)(conptr.get(), _pd, cubio_error_make(error.value(), &error.category()));
+      (*_pf)(conptr.get(), _pd, cubio_error_make(error));
     }else{
       
       auto l = [conptr, _pf, _pd](const system::error_code& error){
-        (*_pf)(conptr.get(), _pd, cubio_error_make(error.value(), &error.category()));
+        (*_pf)(conptr.get(), _pd, cubio_error_make(error));
       };
       
       boost::asio::ip::tcp::endpoint endpoint(*iterator);
@@ -311,10 +330,10 @@ void cubio_connection_async_recv_some(
   auto conptr = _pcon->shared_from_this();
   
   auto l = [conptr, _pf, _pd](const system::error_code& error, std::size_t _len){
-    (*_pf)(conptr.get(), _pd, _len, cubio_error_make(error.value(), &error.category()));
+    (*_pf)(conptr.get(), _pd, _len, cubio_error_make(error));
   };
   
-  _pcon->socket_.async_read_some(asio::buffer(_pbuf, _pbuf_len), l);
+  _pcon->socket_.async_read_some(asio::buffer(_pbuf, _pbuf_len), _pcon->strand_.wrap(l));
 }
 
 //-----------------------------------------------------------------------------
@@ -327,10 +346,10 @@ void cubio_connection_async_send_all(
   auto conptr = _pcon->shared_from_this();
   
   auto l = [conptr, _pf, _pd](const system::error_code& error, std::size_t _len){
-    (*_pf)(conptr.get(), _pd, _len, cubio_error_make(error.value(), &error.category()));
+    (*_pf)(conptr.get(), _pd, _len, cubio_error_make(error));
   };
   
-  asio::async_write(_pcon->socket_, asio::buffer(_pbuf, _pbuf_len), l);
+  asio::async_write(_pcon->socket_, asio::buffer(_pbuf, _pbuf_len), _pcon->strand_.wrap(l));
 }
 
 //-----------------------------------------------------------------------------
@@ -344,7 +363,7 @@ void cubio_connection_post(
   auto l = [conptr, _pf, _pd](){
     (*_pf)(conptr.get(), _pd);
   };
-  _pcon->socket_.get_io_service().post(l);
+  _pcon->strand_.post(l);
 }
 
 //-----------------------------------------------------------------------------
@@ -352,7 +371,7 @@ void cubio_connection_post(
 cubio_error_code cubio_connection_cancel(cubio_connection_t *_pcon){
   boost::system::error_code error;
   _pcon->socket_.cancel(error);
-  return cubio_error_make(error.value(), &error.category());
+  return cubio_error_make(error);
 }
 
 //-----------------------------------------------------------------------------
@@ -360,18 +379,35 @@ cubio_error_code cubio_connection_cancel(cubio_connection_t *_pcon){
 cubio_error_code cubio_connection_close(cubio_connection_t *_pcon){
   boost::system::error_code error;
   _pcon->socket_.close(error);
-  return cubio_error_make(error.value(), &error.category());
+  return cubio_error_make(error);
 }
 
 //-----------------------------------------------------------------------------
 
-void cubio_connection_timer_async_wait(
+bool cubio_connection_timer_async_wait(
   cubio_connection_t *_pcon,
-  long _seconds,
-  long _milli_seconds,
+  unsigned long _seconds,
+  unsigned long _milliseconds,
   cubio_timer_function_t _pf, void *_pd
 ){
+  auto conptr = _pcon->shared_from_this();
   
+  auto l = [conptr, _pf, _pd](const system::error_code& error){
+    if(error != asio::error::operation_aborted){
+      (*_pf)(conptr.get(), _pd, cubio_error_make(error));
+    }
+  };
+  
+  _pcon->timer_.expires_from_now(posix_time::seconds(_seconds) + posix_time::milliseconds(_milliseconds));
+  _pcon->timer_.async_wait(_pcon->strand_.wrap(l));
+  return true;
+}
+
+//-----------------------------------------------------------------------------
+
+bool cubio_connection_timer_cancel(cubio_connection_t *_pcon){
+  boost::system::error_code error;
+  return _pcon->timer_.cancel(error) != 0;
 }
 
 //-----------------------------------------------------------------------------
@@ -380,19 +416,83 @@ void cubio_connection_timer_async_wait(
 
 
 cubio_service_t* cubio_create_passive_service(){
-  return NULL;
+  cubio_service *psvc = new cubio_service;;
+  return psvc;
 }
 
 //-----------------------------------------------------------------------------
 
-cubio_acceptor_t* cubio_create_plain_acceptor(cubio_service_t*, const char *_host, const char *_service, long _listen_queue_size){
-  return NULL;
+struct cubio_acceptor{
+  asio::ip::tcp::acceptor acc_;
+  cubio_acceptor(asio::io_service &_rio_service): acc_(_rio_service){}
+};
+
+cubio_acceptor_t* cubio_create_plain_acceptor(cubio_service_t* _psvc, const char *_host, const char *_service, long _listen_queue_size, cubio_error_code* _perr){
+  asio::ip::tcp::endpoint endpoint = *_psvc->io_resolver_.resolve({asio::ip::tcp::v4(), _host, _service});
+  cubio_acceptor          *pacc = new cubio_acceptor(_psvc->io_service_);
+  
+  boost::system::error_code error;
+  if(pacc->acc_.open(asio::ip::tcp::v4(), error)){
+    delete pacc;
+    *_perr = cubio_error_make(error);
+    return nullptr;
+  }
+  
+  boost::asio::socket_base::reuse_address option(true);
+      
+  if(pacc->acc_.set_option(option, error)){
+    delete pacc;
+    *_perr = cubio_error_make(error);
+    return nullptr;
+  }
+  
+  if(pacc->acc_.bind(endpoint, error)){
+    delete pacc;
+    *_perr = cubio_error_make(error);
+    return nullptr;
+  }
+  
+  if(pacc->acc_.listen(_listen_queue_size, error)){
+    delete pacc;
+    *_perr = cubio_error_make(error);
+    return nullptr;
+  }
+  
+  return pacc;
 }
 
 //-----------------------------------------------------------------------------
 
-cubio_stream_t* cubio_acceptor_accept(cubio_acceptor_t*){
-  return NULL;
+void cubio_acceptor_close(cubio_acceptor_t *_pacc){
+  boost::system::error_code error;
+  _pacc->acc_.close(error);
+}
+
+//-----------------------------------------------------------------------------
+
+void cubio_acceptor_destroy(cubio_acceptor_t *_pacc){
+  delete _pacc;
+}
+
+//-----------------------------------------------------------------------------
+
+struct cubio_stream{
+  asio::ip::tcp::socket stream_;
+  cubio_stream(asio::io_service &_rio_service):stream_(_rio_service){}
+};
+
+cubio_stream_t* cubio_acceptor_accept(cubio_acceptor_t* _pacc, cubio_error_code*_perr){
+  cubio_stream *ps = new cubio_stream(_pacc->acc_.get_io_service());
+  
+  boost::system::error_code error;
+  
+  if(_pacc->acc_.accept(ps->stream_, error)){
+    delete ps;
+    *_perr = cubio_error_make(error);
+    return nullptr;
+  }
+  
+  return ps;
 }
 
 //-----------------------------------------------------------------------------
@@ -416,8 +516,15 @@ bool cubio_stream_connect(cubio_stream_t*, const char *_host, const char *_servi
 
 //-----------------------------------------------------------------------------
 
-int cubio_stream_read_some(cubio_stream_t*, char *_buf, unsigned _len, long _time, cubio_error_code*){
-  return 0;
+int cubio_stream_read_some(cubio_stream_t*_ps, char *_buf, unsigned _len, long _time, cubio_error_code* _perr){
+  system::error_code error;
+  size_t len = _ps->stream_.read_some(asio::buffer(_buf, _len), error);
+  
+  if(error){
+    *_perr = cubio_error_make(error);
+    return -1;
+  }
+  return static_cast<int>(len);
 }
 
 //-----------------------------------------------------------------------------
@@ -428,7 +535,38 @@ int cubio_stream_read_at_least(cubio_stream_t*, char *_buf, unsigned _len, unsig
 
 //-----------------------------------------------------------------------------
 
-bool cubio_stream_write_all(cubio_stream_t*, const char*_buf, unsigned _len, long _time, cubio_error_code*){
-  return false;
+bool cubio_stream_write_all(cubio_stream_t* _ps, const char*_buf, unsigned _len, long _time, cubio_error_code* _perr){
+  boost::system::error_code error;
+  asio::write(_ps->stream_, asio::buffer(_buf, _len), error);
+  
+  if(error){
+    *_perr = cubio_error_make(error);
+    return false;
+  }
+
+  return true;
 }
+
+//-----------------------------------------------------------------------------
+
+cubio_error_code cubio_stream_set_no_delay(cubio_stream_t *_ps, bool _option){
+  boost::asio::ip::tcp::no_delay  option(_option);
+  system::error_code              error;
+  _ps->stream_.set_option(option, error);
+  return cubio_error_make(error);
+}
+
+//-----------------------------------------------------------------------------
+
+void cubio_stream_close(cubio_stream_t* _ps){
+  boost::system::error_code error;
+  _ps->stream_.close(error);
+}
+
+//-----------------------------------------------------------------------------
+
+void cubio_stream_destroy(cubio_stream_t* _ps){
+  delete _ps;
+}
+
 //-----------------------------------------------------------------------------

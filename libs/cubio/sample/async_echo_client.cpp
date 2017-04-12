@@ -69,7 +69,7 @@ struct ConnectionData{
   }
   
   enum{
-    BufCapacity = 1024
+    BufCapacity = 2 * 1024
   };
   
   ConnectionData():crt_send_index_(0), expect_recv_size_(0), read_size_(0){}
@@ -179,9 +179,11 @@ void on_connection_connect(cubio_connection_t *_pcon, void *, const cubio_error_
   if(cubio_success(&_error)){
     ConnectionData *pcon_data = (ConnectionData*)cubio_connection_get_user_data(_pcon);
     
-    const size_t send_idx = (pcon_data->crt_send_index_ + pcon_data->crt_send_index_) % sizes_size;
+    const size_t send_idx = (pcon_data->index_ + pcon_data->crt_send_index_) % sizes_size;
     
     pcon_data->expect_recv_size_ = send_data_vec[send_idx].size();
+    
+    cubio_connection_set_no_delay(_pcon, true);
     
     //issue a read
     cubio_connection_async_recv_some(_pcon, pcon_data->buf_, ConnectionData::BufCapacity, on_connection_recv, nullptr);
@@ -212,7 +214,7 @@ void on_connection_recv(cubio_connection_t *_pcon, void *_pd, unsigned _len, con
       
       if(pcon_data->crt_send_index_ < parameters.repeat_count){
       
-        const size_t send_idx = (pcon_data->crt_send_index_ + pcon_data->crt_send_index_) % sizes_size;
+        const size_t send_idx = (pcon_data->index_ + pcon_data->crt_send_index_) % sizes_size;
         
         pcon_data->expect_recv_size_ = send_data_vec[send_idx].size();
         

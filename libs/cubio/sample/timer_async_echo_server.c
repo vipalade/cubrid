@@ -4,24 +4,36 @@
 
 #include "cubio/cubio.h"
 
-const unsigned buffer_size = 1024;
+const unsigned buffer_size = 1024 * 2;
+const unsigned seconds_to_wait = 30;
 
 void free_user_data(void *_pv);
 void on_connection_recv(cubio_connection_t *_pcon, void *_pd, unsigned _len, const cubio_error_code _error);
 void on_connection_send(cubio_connection_t *_pcon, void *_pd, unsigned _len, const cubio_error_code _error);
 void on_listener_accept(cubio_listener_t* _plis, cubio_connection_t* _pcon, void *, const cubio_error_code _error);
 void on_listener_start(cubio_listener_t* _plis, void *, const cubio_error_code _error);
+void on_connection_timer(cubio_connection_t *_pcon, void *_pd, const cubio_error_code _error);
 
+#if 1
 #define dbg(d, ...) printf("[%s][%d][%s]"d"\n", __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);
+#else
+#define dbg(d, ...)
+#endif
 
 void free_user_data(void *_pv){
-  printf("[%s][%d][%s]%s\n", __FILE__, __LINE__, __FUNCTION__, "");
+  dbg("");
   if(_pv) free(_pv);
+}
+
+void on_connection_timer(cubio_connection_t *_pcon, void *_pd, const cubio_error_code _error){
+  dbg("");
+  cubio_connection_close(_pcon);
 }
 
 void on_connection_send(cubio_connection_t *_pcon, void *_pd, unsigned _len, const cubio_error_code _error){
   if(cubio_success(&_error)){
     dbg("");
+    cubio_connection_timer_async_wait(_pcon, seconds_to_wait, 0, on_connection_timer, NULL);
     cubio_connection_async_recv_some(_pcon, cubio_connection_get_user_data(_pcon), buffer_size, on_connection_recv, NULL);
   }else{
     cubio_connection_close(_pcon);
@@ -30,7 +42,7 @@ void on_connection_send(cubio_connection_t *_pcon, void *_pd, unsigned _len, con
 
 void on_connection_recv(cubio_connection_t *_pcon, void *_pd, unsigned _len, const cubio_error_code _error){
   if(cubio_success(&_error)){
-    
+    cubio_connection_timer_async_wait(_pcon, seconds_to_wait, 0, on_connection_timer, NULL);
     cubio_connection_async_send_all(_pcon, cubio_connection_get_user_data(_pcon), _len, on_connection_send, NULL);
   }else{
     cubio_connection_close(_pcon);
@@ -44,6 +56,7 @@ void on_listener_accept(cubio_listener_t* _plis, cubio_connection_t* _pcon, void
     dbg("");
     cubio_connection_set_user_data(_pcon, malloc(buffer_size), &free_user_data);
     cubio_connection_async_recv_some(_pcon, cubio_connection_get_user_data(_pcon), buffer_size, on_connection_recv, NULL);
+    cubio_connection_timer_async_wait(_pcon, seconds_to_wait, 0, on_connection_timer, NULL);
     cubio_listener_async_accept(_plis, &on_listener_accept, NULL);
   }else{
     exit(0);
@@ -79,5 +92,4 @@ int main(int argc, char *argv[]){
   
   return 0;
 }
-
 

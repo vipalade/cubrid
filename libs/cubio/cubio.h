@@ -100,6 +100,8 @@ void* cubio_connection_get_user_data(cubio_connection_t *_pcon);
 
 void cubio_connection_set_user_data(cubio_connection_t *_pcon, void *, cubio_free_user_data_t _pf);
 
+cubio_error_code cubio_connection_set_no_delay(cubio_connection_t *_pcon, bool _option);
+
 typedef void (*cubio_connect_function_t)(cubio_connection_t *, void *, const cubio_error_code);
 
 void cubio_connection_async_connect(
@@ -136,26 +138,30 @@ cubio_error_code cubio_connection_cancel(cubio_connection_t *_pcon);
 
 typedef void (*cubio_timer_function_t)(cubio_connection_t *, void *, const cubio_error_code);
 
-void cubio_connection_timer_async_wait(
+bool cubio_connection_timer_async_wait(
   cubio_connection_t *_pcon,
-  long _seconds,
-  long _milli_seconds,
+  unsigned long _seconds,
+  unsigned long _milliseconds,
   cubio_timer_function_t _pf, void *_pd
 );
+
+bool cubio_connection_timer_cancel(cubio_connection_t *_pcon);
 
 //-----------------------------------------------------------------------------
 /* Synchronous API */
 //-----------------------------------------------------------------------------
 
-typedef struct cubio_steam cubio_stream_t;
+typedef struct cubio_stream cubio_stream_t;
 typedef struct cubio_acceptor cubio_acceptor_t;
 
 cubio_service_t* cubio_create_passive_service();
 
+cubio_acceptor_t* cubio_create_plain_acceptor(cubio_service_t*, const char *_host, const char *_service, long _listen_queue_size, cubio_error_code*);
 
-cubio_acceptor_t* cubio_create_plain_acceptor(cubio_service_t*, const char *_host, const char *_service, long _listen_queue_size);
+void cubio_acceptor_close(cubio_acceptor_t *);
+void cubio_acceptor_destroy(cubio_acceptor_t *);
 
-cubio_stream_t* cubio_acceptor_accept(cubio_acceptor_t*);
+cubio_stream_t* cubio_acceptor_accept(cubio_acceptor_t*, cubio_error_code*);
 
 cubio_stream_t* cubio_create_plain_stream(cubio_service_t*);
 
@@ -171,6 +177,10 @@ int cubio_stream_read_at_least(cubio_stream_t*, char *_buf, unsigned _len, unsig
 
 bool cubio_stream_write_all(cubio_stream_t*, const char*_buf, unsigned _len, long _time, cubio_error_code*);
 
+cubio_error_code cubio_stream_set_no_delay(cubio_stream_t *_ps, bool _option);
+
+void cubio_stream_close(cubio_stream_t*);
+void cubio_stream_destroy(cubio_stream_t*);
 
 
 #ifdef __cplusplus

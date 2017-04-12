@@ -46,6 +46,7 @@ void on_listener_accept(cubio_listener_t* _plis, cubio_connection_t* _pcon, void
   if(cubio_success(&_error)){
     assert(_pcon != NULL);
     dbg("");
+    cubio_connection_set_no_delay(_pcon, true);
     cubio_connection_set_user_data(_pcon, malloc(buffer_size), &free_user_data);
     cubio_connection_async_recv_some(_pcon, cubio_connection_get_user_data(_pcon), buffer_size, on_connection_recv, NULL);
     cubio_listener_async_accept(_plis, &on_listener_accept, NULL);
