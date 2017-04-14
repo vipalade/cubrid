@@ -87,7 +87,7 @@ set(CONNECTION_SOURCES
   ${CONNECTION_DIR}/connection_sr.c
   ${CONNECTION_DIR}/connection_list_sr.c
   ${CONNECTION_DIR}/connection_globals.c
-  ${CONNECTION_DIR}/server_support.c
+  ${CONNECTION_DIR}/server_support.cpp
   ${CONNECTION_DIR}/connection_support.c
   )
 

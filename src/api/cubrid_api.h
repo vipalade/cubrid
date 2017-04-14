@@ -129,7 +129,7 @@ typedef enum
   CUBRID_MAX_STMT_TYPE
 } CUBRID_STMT_TYPE;
 
-typedef enum ci_type CI_TYPE;
+
 typedef UINT64 CI_CONNECTION;
 typedef UINT64 CI_STATEMENT;
 typedef UINT64 CI_PARAMETER_METADATA;
@@ -151,12 +151,7 @@ struct ci_time_s
   short millisecond;
 };
 
-typedef enum ci_conn_option CI_CONNECTION_OPTION;
-typedef enum ci_stmt_option CI_STATEMENT_OPTION;
-typedef enum ci_fetch_position CI_FETCH_POSITION;
-typedef enum ci_rmeta_info_type CI_RMETA_INFO_TYPE;
-typedef enum ci_pmeta_info_type CI_PMETA_INFO_TYPE;
-typedef enum ci_param_mode CI_PARAMETER_MODE;
+
 
 struct ci_oid_s
 {
@@ -195,6 +190,7 @@ enum ci_type
   CI_TYPE_BIGINT,
   CI_TYPE_DATETIME
 };
+typedef enum ci_type CI_TYPE;
 
 enum ci_conn_option
 {
@@ -204,6 +200,8 @@ enum ci_conn_option
   CI_CONNECTION_OPTION_TRAN_ISOLATION_LV = 4,
   CI_CONNECTION_OPTION_AUTOCOMMIT = 5
 };
+
+typedef enum ci_conn_option CI_CONNECTION_OPTION;
 
 enum ci_stmt_option
 {
@@ -242,6 +240,12 @@ enum ci_param_mode
   CI_PARAM_MODE_IN = 0,
   CI_PARAM_MODE_OUT = 1
 };
+
+typedef enum ci_stmt_option CI_STATEMENT_OPTION;
+typedef enum ci_fetch_position CI_FETCH_POSITION;
+typedef enum ci_rmeta_info_type CI_RMETA_INFO_TYPE;
+typedef enum ci_pmeta_info_type CI_PMETA_INFO_TYPE;
+typedef enum ci_param_mode CI_PARAMETER_MODE;
 
 extern int ci_create_connection (CI_CONNECTION * conn);
 extern int ci_conn_connect (CI_CONNECTION conn, const char *host, unsigned short port, const char *databasename,
