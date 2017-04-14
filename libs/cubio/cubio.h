@@ -161,7 +161,7 @@ cubio_acceptor_t* cubio_create_plain_acceptor(cubio_service_t*, const char *_hos
 void cubio_acceptor_close(cubio_acceptor_t *);
 void cubio_acceptor_destroy(cubio_acceptor_t *);
 
-cubio_stream_t* cubio_acceptor_accept(cubio_acceptor_t*, cubio_error_code*);
+cubio_stream_t* cubio_acceptor_accept(cubio_acceptor_t*, long _time, cubio_error_code*);
 
 cubio_stream_t* cubio_create_plain_stream(cubio_service_t*);
 
@@ -179,6 +179,7 @@ bool cubio_stream_write_all(cubio_stream_t*, const char*_buf, unsigned _len, lon
 
 cubio_error_code cubio_stream_set_no_delay(cubio_stream_t *_ps, bool _option);
 
+void cubio_stream_shutdown(cubio_stream_t* _ps);
 void cubio_stream_close(cubio_stream_t*);
 void cubio_stream_destroy(cubio_stream_t*);
 

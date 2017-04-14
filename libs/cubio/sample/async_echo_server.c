@@ -41,7 +41,6 @@ void on_connection_recv(cubio_connection_t *_pcon, void *_pd, unsigned _len, con
   }
 }
 
-
 void on_listener_accept(cubio_listener_t* _plis, cubio_connection_t* _pcon, void *_pd, const cubio_error_code _error){
   if(cubio_success(&_error)){
     assert(_pcon != NULL);

@@ -25,10 +25,12 @@ void stream_run(context &_rctx, cubio_stream_t *_ps, const size_t _off){
   cubio_error_code  error = cubio_error_init();
   int               len;
   
+  const long timeout = 60 * 1000;//1 min
+  
   cubio_stream_set_no_delay(_ps, true);
   
-  while(cubio_success(&error) && (len = cubio_stream_read_some(_ps, buf, BufSize, 0, &error)) >= 0){
-    cubio_stream_write_all(_ps, buf, len, 0, &error);
+  while(cubio_success(&error) && (len = cubio_stream_read_some(_ps, buf, BufSize, timeout, &error)) >= 0){
+    cubio_stream_write_all(_ps, buf, len, timeout, &error);
   }
   
   //connection closed
@@ -37,7 +39,7 @@ void stream_run(context &_rctx, cubio_stream_t *_ps, const size_t _off){
     _rctx.streamvec[_off] = nullptr;
     _rctx.freestk.push(_off);
   }
-  
+  cubio_stream_close(_ps);
   cubio_stream_destroy(_ps);
 }
 
@@ -45,7 +47,7 @@ void acceptor_run(context &_rctx, cubio_acceptor_t *_pacc){
   cubio_stream_t    *pstream;
   cubio_error_code  error;
   
-  while((pstream = cubio_acceptor_accept(_pacc, &error))){
+  while((pstream = cubio_acceptor_accept(_pacc, -1, &error))){
     size_t off;
     unique_lock<mutex> lock(_rctx.mtx);
     if(_rctx.freestk.size()){
@@ -90,7 +92,7 @@ int main(int argc, char *argv[]){
   {
     unique_lock<mutex> lock(ctx.mtx);
     for(const auto& pstream: ctx.streamvec){
-      cubio_stream_close(pstream);
+      cubio_stream_shutdown(pstream);
     }
   }
   

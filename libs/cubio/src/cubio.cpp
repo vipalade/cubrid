@@ -439,12 +439,14 @@ cubio_acceptor_t* cubio_create_plain_acceptor(cubio_service_t* _psvc, const char
   }
   
   boost::asio::socket_base::reuse_address option(true);
-      
+  
   if(pacc->acc_.set_option(option, error)){
     delete pacc;
     *_perr = cubio_error_make(error);
     return nullptr;
   }
+  
+  pacc->acc_.non_blocking(true);
   
   if(pacc->acc_.bind(endpoint, error)){
     delete pacc;
@@ -481,18 +483,56 @@ struct cubio_stream{
   cubio_stream(asio::io_service &_rio_service):stream_(_rio_service){}
 };
 
-cubio_stream_t* cubio_acceptor_accept(cubio_acceptor_t* _pacc, cubio_error_code*_perr){
-  cubio_stream *ps = new cubio_stream(_pacc->acc_.get_io_service());
+int call_poll(pollfd &_fd, long _time){
+  const int maxwait = 1000 * 10; //ten seconds
   
-  boost::system::error_code error;
+  int pollrv;
   
-  if(_pacc->acc_.accept(ps->stream_, error)){
-    delete ps;
-    *_perr = cubio_error_make(error);
+  if(_time == 0){
+    pollrv = poll(&_fd, 1, 0);
+  }else if(_time < 0){
+    while((pollrv = poll(&_fd, 1, maxwait)) == 0);
+  }else{
+    int wait = _time;
+    if(wait > maxwait){
+      wait = maxwait;
+    }
+    while(wait && ((pollrv = poll(&_fd, 1, wait)) == 0)){
+      _time -= wait;
+      wait = _time;
+      if(wait > maxwait){
+        wait = maxwait;
+      }
+    }
+  }
+  return pollrv;
+}
+
+cubio_stream_t* cubio_acceptor_accept(cubio_acceptor_t* _pacc, long _time, cubio_error_code*_perr){
+  
+  pollfd epfd;
+  epfd.fd = _pacc->acc_.native_handle();
+  epfd.events = POLLIN;
+  epfd.revents = 0;
+  
+  int pollrv = call_poll(epfd, _time);
+  
+  if(pollrv == 1){
+  
+    cubio_stream *ps = new cubio_stream(_pacc->acc_.get_io_service());
+    
+    boost::system::error_code error;
+      
+    if(_pacc->acc_.accept(ps->stream_, error)){
+      delete ps;
+      *_perr = cubio_error_make(error);
+      return nullptr;
+    }
+    
+    return ps;
+  }else{
     return nullptr;
   }
-  
-  return ps;
 }
 
 //-----------------------------------------------------------------------------
@@ -517,14 +557,24 @@ bool cubio_stream_connect(cubio_stream_t*, const char *_host, const char *_servi
 //-----------------------------------------------------------------------------
 
 int cubio_stream_read_some(cubio_stream_t*_ps, char *_buf, unsigned _len, long _time, cubio_error_code* _perr){
-  system::error_code error;
-  size_t len = _ps->stream_.read_some(asio::buffer(_buf, _len), error);
+  pollfd epfd;
+  epfd.fd = _ps->stream_.native_handle();
+  epfd.events = POLLIN;
+  epfd.revents = 0;
   
-  if(error){
-    *_perr = cubio_error_make(error);
+  int pollrv = call_poll(epfd, _time);
+  if(pollrv){
+    system::error_code error;
+    size_t len = _ps->stream_.read_some(asio::buffer(_buf, _len), error);
+    
+    if(error){
+      *_perr = cubio_error_make(error);
+      return -1;
+    }
+    return static_cast<int>(len);
+  }else{
     return -1;
   }
-  return static_cast<int>(len);
 }
 
 //-----------------------------------------------------------------------------
@@ -536,13 +586,24 @@ int cubio_stream_read_at_least(cubio_stream_t*, char *_buf, unsigned _len, unsig
 //-----------------------------------------------------------------------------
 
 bool cubio_stream_write_all(cubio_stream_t* _ps, const char*_buf, unsigned _len, long _time, cubio_error_code* _perr){
-  boost::system::error_code error;
-  asio::write(_ps->stream_, asio::buffer(_buf, _len), error);
   
-  if(error){
-    *_perr = cubio_error_make(error);
-    return false;
-  }
+  pollfd epfd;
+  epfd.fd = _ps->stream_.native_handle();
+  epfd.events = POLLOUT;
+  do{
+    epfd.revents = 0;
+    int pollrv = call_poll(epfd, _time);
+    if(pollrv){
+      boost::system::error_code error;
+      size_t len = _ps->stream_.write_some(asio::buffer(_buf, _len), error);
+      if(!error){
+        _len -= len;
+      }else{
+        *_perr = cubio_error_make(error);
+        return false;
+      }
+    }
+  }while(_len);
 
   return true;
 }
@@ -558,9 +619,20 @@ cubio_error_code cubio_stream_set_no_delay(cubio_stream_t *_ps, bool _option){
 
 //-----------------------------------------------------------------------------
 
+void cubio_stream_shutdown(cubio_stream_t* _ps){
+  if(_ps){
+    boost::system::error_code error;
+    _ps->stream_.shutdown(asio::ip::tcp::socket::shutdown_both, error);
+  }
+}
+
+//-----------------------------------------------------------------------------
+
 void cubio_stream_close(cubio_stream_t* _ps){
-  boost::system::error_code error;
-  _ps->stream_.close(error);
+  if(_ps){
+    boost::system::error_code error;
+    _ps->stream_.close(error);
+  }
 }
 
 //-----------------------------------------------------------------------------
