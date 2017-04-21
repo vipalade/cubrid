@@ -72,7 +72,7 @@ int main(int argc, char *argv[]){
   
   cubio_service_t * psvc = cubio_create_active_service(0);
   
-  cubio_listener_start(psvc, argv[1], argv[2], 100, NULL, NULL, on_listener_start, NULL);
+  cubio_listener_start(psvc, argv[1], argv[2], 0, NULL, NULL, on_listener_start, NULL);
   
   printf("Press any key + ENTER to continue...\n");
   char c = ' ';
