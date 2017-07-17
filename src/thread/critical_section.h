@@ -111,6 +111,7 @@ typedef struct sync_critical_section
   THREAD_ENTRY *waiting_promoters_queue;	/* queue of waiting promoters */
   pthread_t owner;		/* CS owner writer */
   int tran_index;		/* transaction id acquiring CS */
+  int *readers;			/* CS readers */
   SYNC_STATS *stats;
 } SYNC_CRITICAL_SECTION;
 

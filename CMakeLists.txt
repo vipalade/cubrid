@@ -955,6 +955,9 @@ if(WIN32)
   list(APPEND JVM_LIBS -DELAYLOAD:jvm.dll)
 endif(WIN32)
 
+## Activate cmake testing support
+ENABLE_TESTING()
+INCLUDE(CTest)
 
 # include subdirectories
 add_subdirectory(cas)
@@ -972,7 +975,7 @@ add_subdirectory(contrib)
 add_subdirectory(tools)
 add_subdirectory(locales)
 add_subdirectory(timezones)
-
+add_subdirectory(test)
 if(WITH_JDBC)
   find_program(ANT ant PATHS $ENV{ANT_HOME} ENV PATH)
   if(NOT ANT)

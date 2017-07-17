@@ -477,8 +477,6 @@ csect_enter_critical_section (THREAD_ENTRY * thread_p, SYNC_CRITICAL_SECTION * c
 			 MGR_DEF);
 #endif /* NDEBUG */
 
-  csect->stats->nenter++;
-
   tsc_getticks (&start_tick);
 
   error_code = pthread_mutex_lock (&csect->lock);
@@ -488,6 +486,8 @@ csect_enter_critical_section (THREAD_ENTRY * thread_p, SYNC_CRITICAL_SECTION * c
       assert (0);
       return ER_CSS_PTHREAD_MUTEX_LOCK;
     }
+
+  csect->stats->nenter++;
 
   while (csect->rwlock != 0 || csect->owner != ((pthread_t) 0))
     {
@@ -703,8 +703,6 @@ csect_enter_critical_section_as_reader (THREAD_ENTRY * thread_p, SYNC_CRITICAL_S
 			 MGR_DEF);
 #endif /* NDEBUG */
 
-  csect->stats->nenter++;
-
   tsc_getticks (&start_tick);
 
   error_code = pthread_mutex_lock (&csect->lock);
@@ -714,6 +712,8 @@ csect_enter_critical_section_as_reader (THREAD_ENTRY * thread_p, SYNC_CRITICAL_S
       assert (0);
       return ER_CSS_PTHREAD_MUTEX_LOCK;
     }
+
+  csect->stats->nenter++;
 
   if (csect->rwlock < 0 && csect->owner == thread_p->tid)
     {
@@ -841,6 +841,21 @@ csect_enter_critical_section_as_reader (THREAD_ENTRY * thread_p, SYNC_CRITICAL_S
 
       /* rwlock will be > 0. record that a reader enters the csect. */
       csect->rwlock++;
+      csect->readers[thread_p->index]++;
+
+#if !defined(NDEBUG)
+      {
+	int num_total_threads = thread_num_total_threads ();
+	int i, num_readers = 0;
+
+	for (i = 0; i < num_total_threads; i++)
+	  {
+	    num_readers += csect->readers[i];
+	  }
+
+	assert (csect->readers[thread_p->index] > 0 && num_readers == csect->rwlock);
+      }
+#endif
     }
 
   tsc_getticks (&end_tick);
@@ -925,8 +940,6 @@ csect_demote_critical_section (THREAD_ENTRY * thread_p, SYNC_CRITICAL_SECTION * 
   thread_rc_track_meter (thread_p, __FILE__, __LINE__, THREAD_TRACK_CSECT_DEMOTE, &(csect->cs_index), RC_CS, MGR_DEF);
 #endif /* NDEBUG */
 
-  csect->stats->nenter++;
-
   tsc_getticks (&start_tick);
 
   error_code = pthread_mutex_lock (&csect->lock);
@@ -936,6 +949,8 @@ csect_demote_critical_section (THREAD_ENTRY * thread_p, SYNC_CRITICAL_SECTION * 
       assert (0);
       return ER_CSS_PTHREAD_MUTEX_LOCK;
     }
+
+  csect->stats->nenter++;
 
   if (csect->rwlock < 0 && csect->owner == thread_p->tid)
     {
@@ -962,6 +977,22 @@ csect_demote_critical_section (THREAD_ENTRY * thread_p, SYNC_CRITICAL_SECTION * 
 #if 0
 	  csect->owner = (pthread_t) 0;
 	  csect->tran_index = -1;
+#endif
+
+	  csect->readers[thread_p->index]++;
+
+#if !defined(NDEBUG)
+	  {
+	    int num_total_threads = thread_num_total_threads ();
+	    int i, num_readers = 0;
+
+	    for (i = 0; i < num_total_threads; i++)
+	      {
+		num_readers += csect->readers[i];
+	      }
+
+	    assert (csect->readers[thread_p->index] > 0 && num_readers == csect->rwlock);
+	  }
 #endif
 	}
     }
@@ -1087,6 +1118,22 @@ csect_demote_critical_section (THREAD_ENTRY * thread_p, SYNC_CRITICAL_SECTION * 
 
       /* rwlock will be > 0. record that a reader enters the csect. */
       csect->rwlock++;
+
+      csect->readers[thread_p->index]++;
+
+#if !defined(NDEBUG)
+      {
+	int num_total_threads = thread_num_total_threads ();
+	int i, num_readers = 0;
+
+	for (i = 0; i < num_total_threads; i++)
+	  {
+	    num_readers += csect->readers[i];
+	  }
+
+	assert (csect->readers[thread_p->index] > 0 && num_readers == csect->rwlock);
+      }
+#endif
     }
 
   tsc_getticks (&end_tick);
@@ -1184,8 +1231,6 @@ csect_promote_critical_section (THREAD_ENTRY * thread_p, SYNC_CRITICAL_SECTION *
   thread_rc_track_meter (thread_p, __FILE__, __LINE__, THREAD_TRACK_CSECT_PROMOTE, &(csect->cs_index), RC_CS, MGR_DEF);
 #endif /* NDEBUG */
 
-  csect->stats->nenter++;
-
   tsc_getticks (&start_tick);
 
   error_code = pthread_mutex_lock (&csect->lock);
@@ -1196,6 +1241,8 @@ csect_promote_critical_section (THREAD_ENTRY * thread_p, SYNC_CRITICAL_SECTION *
       return ER_CSS_PTHREAD_MUTEX_LOCK;
     }
 
+  csect->stats->nenter++;
+
   if (csect->rwlock > 0)
     {
       /* 
@@ -1203,6 +1250,22 @@ csect_promote_critical_section (THREAD_ENTRY * thread_p, SYNC_CRITICAL_SECTION *
        * All writers are waiting on 'writers_queue' with 'waiting_writers++'.
        */
       csect->rwlock--;		/* releasing */
+
+      csect->readers[thread_p->index]--;
+
+#if !defined(NDEBUG)
+      {
+	int num_total_threads = thread_num_total_threads ();
+	int i, num_readers = 0;
+
+	for (i = 0; i < num_total_threads; i++)
+	  {
+	    num_readers += csect->readers[i];
+	  }
+
+	assert (csect->readers[thread_p->index] >= 0 && num_readers == csect->rwlock);
+      }
+#endif
     }
   else
     {
@@ -1318,6 +1381,8 @@ csect_promote_critical_section (THREAD_ENTRY * thread_p, SYNC_CRITICAL_SECTION *
   csect->owner = thread_p->tid;
   csect->tran_index = thread_p->tran_index;
 
+  assert (csect->readers[thread_p->index] == 0);	/* should not be a reader */
+
   tsc_getticks (&end_tick);
   tsc_elapsed_time_usec (&tv_diff, end_tick, start_tick);
   TOTAL_AND_MAX_TIMEVAL (csect->stats->total_elapsed, csect->stats->max_elapsed, tv_diff);
@@ -1423,6 +1488,21 @@ csect_exit_critical_section (THREAD_ENTRY * thread_p, SYNC_CRITICAL_SECTION * cs
   else if (csect->rwlock > 0)
     {
       csect->rwlock--;
+      csect->readers[thread_p->index]--;
+
+#if !defined(NDEBUG)
+      {
+	int num_total_threads = thread_num_total_threads ();
+	int i, num_readers = 0;
+
+	for (i = 0; i < num_total_threads; i++)
+	  {
+	    num_readers += csect->readers[i];
+	  }
+
+	assert (csect->readers[thread_p->index] >= 0 && num_readers == csect->rwlock);
+      }
+#endif
     }
   else
     {
