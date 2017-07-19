@@ -169,6 +169,12 @@ csect_initialize_critical_section (SYNC_CRITICAL_SECTION * csect, const char *na
   csect->waiting_writers_queue = NULL;
   csect->waiting_promoters_queue = NULL;
 
+  const int max_thr_cnt = thread_num_total_threads ();
+
+  csect->readers = (int *) malloc (max_thr_cnt * sizeof (int));
+
+  memset (csect->readers, 0, max_thr_cnt * sizeof (int));
+
   csect->stats = sync_allocate_sync_stats (SYNC_TYPE_CSECT, name);
   if (csect->stats == NULL)
     {
@@ -213,6 +219,8 @@ csect_finalize_critical_section (SYNC_CRITICAL_SECTION * csect)
   csect->waiting_writers = 0;
   csect->waiting_writers_queue = NULL;
   csect->waiting_promoters_queue = NULL;
+  free (csect->readers);
+  csect->readers = NULL;
 
   error_code = sync_deallocate_sync_stats (csect->stats);
   csect->stats = NULL;

@@ -133,7 +133,7 @@ static DAEMON_THREAD_MONITOR thread_Page_post_flush_thread = DAEMON_THREAD_MONIT
 static DAEMON_THREAD_MONITOR *thread_Vacuum_worker_threads = NULL;
 static int thread_First_vacuum_worker_thread_index = -1;
 
-static int thread_initialize_entry (THREAD_ENTRY * entry_ptr);
+/*static*/ int thread_initialize_entry (THREAD_ENTRY * entry_ptr);
 static int thread_finalize_entry (THREAD_ENTRY * entry_ptr);
 static int thread_return_transaction_entry (THREAD_ENTRY * entry_p);
 
@@ -1105,7 +1105,7 @@ thread_initialize_daemon_monitor (DAEMON_THREAD_MONITOR * monitor)
  *   return: void
  *   entry_ptr(in): thread entry to initialize
  */
-static int
+/*static*/ int
 thread_initialize_entry (THREAD_ENTRY * entry_p)
 {
   int r;
